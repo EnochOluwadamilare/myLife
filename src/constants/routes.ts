@@ -10,12 +10,8 @@ export const ROUTES = {
   Register: "Register",
 
   Login: "Login",
-
-  SetupOne: "SetupOne",
-
-  SetupTwo: "SetupTwo",
-
-  SetupThree: "SetupThree",
-
+  HealthSetupOne: "HealthSetupOne",
+  HealthSetupTwo: "HealthSetupTwo",
+  HealthSetupThree: "HealthSetupThree",
   Home: "Home",
 } as const;
