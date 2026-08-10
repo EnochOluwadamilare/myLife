@@ -2,21 +2,13 @@ export const theme = {
   colors: {
     primary: "#1E9E96",
     secondary: "#F37365",
-
     background: "#F5F5F5",
-
     white: "#FFFFFF",
-
     text: "#1F2937",
-
     textSecondary: "#6B7280",
-
     border: "#E5E7EB",
-
     success: "#22C55E",
-
     warning: "#F59E0B",
-
     danger: "#EF4444",
   },
 
