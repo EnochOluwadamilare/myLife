@@ -219,10 +219,12 @@ export const HomeScreen = ({ navigation}: any) => {
                 </Text>
             </View>
 
-            <View style={styles.bellWrapper}>
+            <TouchableOpacity onPress={() => navigation.navigate(ROUTES.Notifications)}>
+              <View style={styles.bellWrapper}>
                 <Text style={styles.bell}>🔔</Text>
                 <View style={styles.notificationDot} />
-            </View>
+              </View>
+            </TouchableOpacity>
             </View>
 
             <View style={[styles.cardBase, styles.pregnancyCard]}>
