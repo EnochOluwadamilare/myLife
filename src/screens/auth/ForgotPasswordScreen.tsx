@@ -50,11 +50,11 @@ export const ForgotPasswordScreen = ({ navigation }: any) => {
 
   return (
     <SafeAreaView style={styles.screen}>
-      <View style={styles.container}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.back}>← Back</Text>
-        </TouchableOpacity>
+      <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+        <Text style={styles.back}>← Back</Text>
+      </TouchableOpacity>
 
+      <View style={styles.container}>
         <Text style={styles.title}>Forgot Password?</Text>
 
         <Text style={styles.subtitle}>
@@ -92,17 +92,18 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#DFF8F2",
   },
+  backButton: {
+    paddingHorizontal: 24,
+    paddingVertical: 16,
+  },
+  back: {
+    fontSize: 16,
+    color: theme.colors.text,
+  },
   container: {
     flex: 1,
     padding: 24,
     justifyContent: "center",
-  },
-  back: {
-    position: "absolute",
-    top: 24,
-    left: 24,
-    fontSize: 16,
-    color: theme.colors.text,
   },
   title: {
     fontSize: 30,

@@ -8,7 +8,9 @@ import {
   Alert,
   Linking,
   Platform,
-  DimensionValue
+  DimensionValue,
+  Image,
+  Modal,
 } from "react-native";
 import { theme } from "@/theme/theme";
 import { authApi } from "@/api/auth/authApi";
@@ -26,6 +28,7 @@ import { getCurrentHealthTip, stripHtml } from "@/utils/healthTips";
 import { chatApi } from "@/api/chat/chatApi";
 import { localNotificationService, LocalScheduledNotification } from "@/services/notifications/localNotificationService";
 import { useFocusEffect } from "@react-navigation/native";
+import { WebView } from "react-native-webview";
 
 
 const DOCTOR_PHONE = "+2348059993533";
@@ -63,9 +66,8 @@ const openScheduleVisit = () => {
   Alert.alert("Talk to a Doctor3");
 };
 
-
 export const HomeScreen = ({ navigation}: any) => {
-    const { user, setUser, logout } = useAuthStore();
+    const { user, token, setUser, logout } = useAuthStore();
     const setup = useHealthSetupStore();
     const viralLoad = setup.viral_load ?? 0;
     const viralInfo = getViralLoadStatus(Number(viralLoad));
@@ -99,6 +101,120 @@ export const HomeScreen = ({ navigation}: any) => {
     const [scheduledNotifications, setScheduledNotifications] = useState<
       LocalScheduledNotification[]
     >([]);
+    const [isMenuOpen, setIsMenuOpen] = useState(false);
+    const [webviewVisible, setWebviewVisible] = useState(false);
+    const [webviewUrl, setWebviewUrl] = useState(
+      "https://mylife.ng/feedback?questionnaire=initial-feedback"
+    );
+    const [webviewTitle, setWebviewTitle] = useState("Question");
+    const [webviewHeaders, setWebviewHeaders] = useState<Record<string, string>>({});
+    const [webviewSessionCookie, setWebviewSessionCookie] = useState("");
+    const [webviewXsrfCookie, setWebviewXsrfCookie] = useState("");
+
+    const buildWebviewHeaders = useCallback((sessionCookie?: string) => {
+      const headers: Record<string, string> = {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        "X-User-Name": String(user?.name ?? ""),
+        "X-User-Email": String(user?.email ?? ""),
+        "X-User-Phone": String(user?.phone ?? ""),
+        "X-User-Id": String(user?.id ?? ""),
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      };
+
+      if (sessionCookie) {
+        headers.Cookie = sessionCookie;
+      }
+
+      return headers;
+    }, [token, user]);
+
+    const extractCookieValue = useCallback((setCookieHeader: string | null | undefined, cookieName: string) => {
+      if (!setCookieHeader) return "";
+
+      const cookiePattern = new RegExp(`${cookieName}=([^;]+)`, "i");
+      const match = setCookieHeader.match(cookiePattern);
+
+      if (!match) {
+        return "";
+      }
+
+      return `${cookieName}=${match[1]}`;
+    }, []);
+
+    const webviewCookieInjection = useCallback(() => {
+      const scripts: string[] = [];
+
+      if (webviewSessionCookie) {
+        scripts.push(
+          `try { document.cookie = ${JSON.stringify(`${webviewSessionCookie}; path=/; domain=.mylife.ng`)}; } catch (e) {}`
+        );
+      }
+
+      if (webviewXsrfCookie) {
+        scripts.push(
+          `try { document.cookie = ${JSON.stringify(`${webviewXsrfCookie}; path=/; domain=.mylife.ng`)}; } catch (e) {}`
+        );
+      }
+
+      return scripts.join("\n");
+    }, [webviewSessionCookie, webviewXsrfCookie]);
+
+    const openMenuWebView = async (type: "question" | "dashboard") => {
+      try {
+        if (!token) {
+          Alert.alert("Authentication Error", "Your session is not available.");
+          return;
+        }
+
+        const authResponse = await fetch("https://mylife.ng/api/auth/token-login", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+        });
+
+        const responseBody = await authResponse.json().catch(() => null);
+
+        if (!authResponse.ok) {
+          Alert.alert(
+            "Authentication Error",
+            responseBody?.message || "Could not login to web app"
+          );
+          return;
+        }
+
+        const setCookieHeader = authResponse.headers.get("set-cookie") || "";
+        const sessionCookie = extractCookieValue(setCookieHeader, "laravel_session");
+        const xsrfCookie = extractCookieValue(setCookieHeader, "XSRF-TOKEN");
+
+        const nextUrl =
+          type === "question"
+            ? "https://mylife.ng/feedback?questionnaire=initial-feedback"
+            : "https://mylife.ng/user/dashboard";
+
+        setWebviewSessionCookie(sessionCookie);
+        setWebviewXsrfCookie(xsrfCookie);
+        setWebviewUrl(nextUrl);
+        setWebviewTitle(type === "question" ? "Questionnaire" : "Dashboard");
+        setWebviewHeaders(buildWebviewHeaders(sessionCookie));
+        setIsMenuOpen(false);
+        setWebviewVisible(true);
+      } catch (error) {
+        console.error("WebView authentication error:", error);
+        Alert.alert("Error", "Failed to load web content");
+      }
+    };
+
+    const authHeaders = {
+      Authorization: token ? `Bearer ${token}` : "",
+      "X-User-Name": String(user?.name ?? ""),
+      "X-User-Email": String(user?.email ?? ""),
+      "X-User-Phone": String(user?.phone ?? ""),
+      "X-User-Id": String(user?.id ?? ""),
+    };
+
     const loadScheduledNotifications = useCallback(async () => {
       try {
         const notifications =
@@ -205,12 +321,125 @@ export const HomeScreen = ({ navigation}: any) => {
   return (
     <SafeAreaView style={styles.screen} edges={["top", "bottom"]}>
         <View style={styles.screen}>
+        <Modal
+          transparent
+          visible={isMenuOpen}
+          animationType="slide"
+          onRequestClose={() => setIsMenuOpen(false)}
+        >
+          <TouchableOpacity
+            activeOpacity={1}
+            style={styles.overlay}
+            onPress={() => setIsMenuOpen(false)}
+          >
+            <View style={styles.menuPanel}>
+              <TouchableOpacity
+                style={styles.closeButton}
+                onPress={() => setIsMenuOpen(false)}
+              >
+                <Text style={styles.closeButtonText}>✕</Text>
+              </TouchableOpacity>
+
+              <Image
+                source={require("@/assets/images/mylifelogobig.png")}
+                style={styles.drawerLogo}
+                resizeMode="contain"
+              />
+
+              {[
+                {
+                  label: "Questionnaire",
+                  onPress: () => openMenuWebView("question"),
+                },
+                {
+                  label: "Home",
+                  onPress: () => {
+                    setIsMenuOpen(false);
+                    navigation.navigate(ROUTES.Home);
+                  },
+                },
+                {
+                  label: "Dashboard",
+                  onPress: () => openMenuWebView("dashboard"),
+                },
+                {
+                  label: "Support",
+                  onPress: () => {
+                    setIsMenuOpen(false);
+                    navigation.navigate(ROUTES.Support);
+                  },
+                },
+                {
+                  label: "Profile",
+                  onPress: () => {
+                    setIsMenuOpen(false);
+                    navigation.navigate(ROUTES.Profile);
+                  },
+                },
+              ].map((item) => (
+                <TouchableOpacity
+                  key={item.label}
+                  style={styles.menuItem}
+                  onPress={item.onPress}
+                >
+                  <Text style={styles.menuItemText}>{item.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </TouchableOpacity>
+        </Modal>
+
+        <Modal
+          transparent
+          visible={webviewVisible}
+          animationType="slide"
+          onRequestClose={() => setWebviewVisible(false)}
+        >
+          <View style={styles.webContainer}>
+            <View style={styles.webHeader}>
+              <TouchableOpacity onPress={() => setWebviewVisible(false)}>
+                <Text style={styles.closeText}>Close</Text>
+              </TouchableOpacity>
+
+              <Text style={styles.webTitle}>{webviewTitle}</Text>
+
+              <View style={{ width: 50 }} />
+            </View>
+
+            <WebView
+              source={{
+                uri: webviewUrl,
+                headers: webviewHeaders,
+              }}
+              style={styles.webview}
+              startInLoadingState
+              javaScriptEnabled
+              sharedCookiesEnabled
+              thirdPartyCookiesEnabled
+              injectedJavaScript={webviewCookieInjection()}
+              onLoadStart={() => {
+                if (webviewCookieInjection()) {
+                  console.log("Injecting Laravel session cookie into WebView");
+                }
+              }}
+              onHttpError={(syntheticEvent) => {
+                console.log("WebView HTTP error:", syntheticEvent.nativeEvent.statusCode);
+              }}
+              onError={(syntheticEvent) => {
+                console.log("WebView error:", syntheticEvent.nativeEvent.description);
+              }}
+            />
+          </View>
+        </Modal>
+
         <ScrollView
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.container}
         >
             <View style={styles.header}>
-            <Text style={styles.menu}>☰</Text>
+            <TouchableOpacity onPress={() => setIsMenuOpen(true)}>
+              <Text style={styles.menu}>☰</Text>
+            </TouchableOpacity>
 
             <View>
                 <Text style={styles.greeting}>Hello, {firstName} 👋</Text>
@@ -319,7 +548,7 @@ export const HomeScreen = ({ navigation}: any) => {
             Based on your health profile
             </Text>
 
-            <View style={styles.listCard}>
+            <TouchableOpacity style={styles.listCard} onPress={() => navigation.navigate(ROUTES.Education)}>
             <View style={styles.tipIcon}>
                 <Text>🛡️</Text>
             </View>
@@ -334,7 +563,7 @@ export const HomeScreen = ({ navigation}: any) => {
             </View>
 
             <Text style={styles.arrow}>›</Text>
-            </View>
+            </TouchableOpacity>
 
             <View style={styles.quizCard}>
             <View style={styles.tipIcon}>
@@ -386,7 +615,7 @@ export const HomeScreen = ({ navigation}: any) => {
 
         <View style={styles.bottomNav}>
             <BottomNavItem icon="🏠" label="Home" active />
-            <BottomNavItem icon="📈" label="Track" onPress={openDoctorChat} />
+            <BottomNavItem icon="📈" label="Dashboard" onPress={()=> openMenuWebView("dashboard")} />
             <BottomNavItem icon="🎧" label="Support" onPress={() => navigation.navigate(ROUTES.Support)} />
             <BottomNavItem icon="👤" label="Profile" onPress={() => navigation.navigate(ROUTES.Profile)} />
         </View>
@@ -775,5 +1004,71 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: "#6B7280",
     lineHeight: 19,
+  },
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(17, 24, 39, 0.35)",
+    justifyContent: "flex-start",
+  },
+  menuPanel: {
+    width: "78%",
+    height: "100%",
+    backgroundColor: theme.colors.white,
+    paddingHorizontal: 20,
+    paddingTop: 26,
+    paddingBottom: 32,
+    borderTopRightRadius: 24,
+    borderBottomRightRadius: 24,
+  },
+  closeButton: {
+    alignSelf: "flex-end",
+    marginBottom: 8,
+  },
+  closeButtonText: {
+    fontSize: 24,
+    color: theme.colors.text,
+  },
+  drawerLogo: {
+    width: 160,
+    height: 80,
+    alignSelf: "center",
+    marginBottom: 20,
+  },
+  menuItem: {
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
+  },
+  menuItemText: {
+    fontSize: 17,
+    fontWeight: "700",
+    color: theme.colors.text,
+  },
+  webContainer: {
+    flex: 1,
+    backgroundColor: theme.colors.white,
+  },
+  webHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
+    backgroundColor: theme.colors.white,
+  },
+  closeText: {
+    color: theme.colors.primary,
+    fontWeight: "700",
+    fontSize: 14,
+  },
+  webTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: theme.colors.text,
+  },
+  webview: {
+    flex: 1,
   },
 });

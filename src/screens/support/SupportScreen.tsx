@@ -1,5 +1,3 @@
-// src/screens/support/SupportScreen.tsx
-
 import React from "react";
 import {
   View,
@@ -8,6 +6,7 @@ import {
   TouchableOpacity,
   Linking,
   Alert,
+  ScrollView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -53,7 +52,7 @@ export const SupportScreen = ({ navigation }: any) => {
 
   return (
     <SafeAreaView style={styles.screen}>
-      <View style={styles.container}>
+      <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Text style={styles.back}>← Back</Text>
         </TouchableOpacity>
@@ -97,7 +96,8 @@ export const SupportScreen = ({ navigation }: any) => {
           button="Visit Website"
           onPress={() => openUrl(SUPPORT.website)}
         />
-      </View>
+
+      </ScrollView>
     </SafeAreaView>
   );
 };
@@ -130,6 +130,7 @@ const styles = StyleSheet.create({
   },
   container: {
     padding: 22,
+    paddingBottom: 100,
   },
   back: {
     fontSize: 16,
